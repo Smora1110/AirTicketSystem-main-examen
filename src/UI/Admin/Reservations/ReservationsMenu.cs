@@ -2,6 +2,7 @@
 using AirTicketSystem.shared.UI;
 using AirTicketSystem.shared.helpers;
 using AirTicketSystem.UI.Admin.Billing;
+using AirTicketSystem.UI.Admin.Reservations;
 
 namespace AirTicketSystem.UI.Admin.Reservations;
 
@@ -25,6 +26,7 @@ public sealed class ReservationsMenu
             var opcion = SpectreHelper.SeleccionarOpcionTexto("Seleccione un módulo",
                 [
                     "Reservas",
+                    "Lista de Espera y Reprogramación",
                     "Pasajeros de reserva",
                     "Check-in",
                     "Tiquetes",
@@ -38,6 +40,7 @@ public sealed class ReservationsMenu
             switch (opcion)
             {
                 case "Reservas":           await new BookingMenu(_provider, _session).MostrarAsync(); break;
+                case "Lista de Espera y Reprogramación": await new WaitingListMenu(_provider).MostrarAsync(); break;
                 case "Pasajeros de reserva": await new PassengerMenu(_provider).MostrarAsync();       break;
                 case "Check-in":           await new CheckInMenu(_provider).MostrarAsync();           break;
                 case "Tiquetes":           await new TicketAdminMenu(_provider).MostrarAsync();       break;

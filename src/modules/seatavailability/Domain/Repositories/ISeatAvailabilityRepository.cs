@@ -5,6 +5,7 @@ namespace AirTicketSystem.modules.seatavailability.Domain.Repositories;
 
 public interface ISeatAvailabilityRepository
 {
+    Task<SeatAvailability?> FindByIdAsync(int id);
     Task<SeatAvailability?> FindByVueloAndAsientoAsync(int vueloId, int asientoId);
     Task<IReadOnlyCollection<SeatAvailability>> FindByVueloAsync(int vueloId);
     Task<IReadOnlyCollection<SeatAvailability>> FindDisponiblesByVueloAsync(int vueloId);

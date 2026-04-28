@@ -93,6 +93,7 @@ public sealed class BookingRepository : IBookingRepository
         var entity = await _context.Reservas.FindAsync(booking.Id)
             ?? throw new KeyNotFoundException($"No se encontró la reserva con ID {booking.Id}.");
 
+        entity.VueloId         = booking.VueloId;
         entity.Estado          = booking.Estado.Valor;
         entity.FechaExpiracion = booking.FechaExpiracion.Valor;
         entity.Observaciones   = booking.Observaciones?.Valor;

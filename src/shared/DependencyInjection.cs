@@ -155,6 +155,12 @@ using AirTicketSystem.modules.additionalcharge.Application.UseCases;
 using AirTicketSystem.modules.flighthistory.Application.UseCases;
 using AirTicketSystem.modules.paymentmethod.Application.UseCases;
 using AirTicketSystem.modules.luggagerestriction.Application.UseCases;
+using AirTicketSystem.modules.waitinglist.Domain.Repositories;
+using AirTicketSystem.modules.waitinglist.Infrastructure.repository;
+using AirTicketSystem.modules.waitinglist.Application.UseCases;
+using AirTicketSystem.modules.reprogramacion.Domain.Repositories;
+using AirTicketSystem.modules.reprogramacion.Infrastructure.repository;
+using AirTicketSystem.modules.reprogramacion.Application.UseCases;
 
 namespace AirTicketSystem.shared;
 
@@ -230,6 +236,8 @@ public static class DependencyInjection
         services.AddScoped<IRoleRepository,               RoleRepository>();
         services.AddScoped<IRouteRepository,              RouteRepository>();
         services.AddScoped<ISeatAvailabilityRepository,   SeatAvailabilityRepository>();
+        services.AddScoped<IWaitingListRepository,         WaitingListRepository>();
+        services.AddScoped<IRescheduleHistoryRepository,   RescheduleHistoryRepository>();
         services.AddScoped<IServiceClassRepository,       ServiceClassRepository>();
         services.AddScoped<ISpecialtyRepository,          SpecialtyRepository>();
         services.AddScoped<ITerminalRepository,           TerminalRepository>();
@@ -591,6 +599,15 @@ public static class DependencyInjection
         services.AddScoped<ReserveSeatUseCase>();
         services.AddScoped<AirTicketSystem.modules.seatavailability.Application.UseCases.ReleaseSeatUseCase>();
         services.AddScoped<BlockSeatUseCase>();
+
+        // WaitingList
+        services.AddScoped<AddToWaitingListUseCase>();
+        services.AddScoped<GetWaitingListByFlightUseCase>();
+        services.AddScoped<PromoteFromWaitingListUseCase>();
+
+        // Reprogramación
+        services.AddScoped<RescheduleBookingUseCase>();
+        services.AddScoped<GetRescheduleHistoryUseCase>();
 
         // Worker
         services.AddScoped<CreateWorkerUseCase>();

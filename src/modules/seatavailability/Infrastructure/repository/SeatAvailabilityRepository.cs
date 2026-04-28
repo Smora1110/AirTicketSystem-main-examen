@@ -16,6 +16,12 @@ public sealed class SeatAvailabilityRepository : ISeatAvailabilityRepository
         _context = context;
     }
 
+    public async Task<SeatAvailability?> FindByIdAsync(int id)
+    {
+        var entity = await _context.DisponibilidadAsientos.FindAsync(id);
+        return entity is null ? null : MapToDomain(entity);
+    }
+
     public async Task<SeatAvailability?> FindByVueloAndAsientoAsync(
         int vueloId, int asientoId)
     {

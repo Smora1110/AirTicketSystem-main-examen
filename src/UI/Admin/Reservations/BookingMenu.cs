@@ -5,6 +5,7 @@ using AirTicketSystem.shared.helpers;
 using AirTicketSystem.modules.booking.Application.UseCases;
 using AirTicketSystem.modules.flight.Application.UseCases;
 using AirTicketSystem.modules.fare.Application.UseCases;
+using AirTicketSystem.modules.waitinglist.Application.UseCases;
 
 namespace AirTicketSystem.UI.Admin.Reservations;
 
@@ -32,6 +33,8 @@ public sealed class BookingMenu
                     "Crear reserva",
                     "Confirmar reserva",
                     "Cancelar reserva",
+                    "Reprogramar reserva",
+                    "Agregar a lista de espera",
                     "Extender expiración",
                     "Actualizar observaciones",
                     "Expirar reserva",
@@ -45,6 +48,8 @@ public sealed class BookingMenu
                 case "Crear reserva":            await CrearAsync();                 break;
                 case "Confirmar reserva":        await ConfirmarAsync();             break;
                 case "Cancelar reserva":         await CancelarAsync();              break;
+                case "Reprogramar reserva":      await ReprogramarAsync();           break;
+                case "Agregar a lista de espera": await AgregarListaEsperaAsync();  break;
                 case "Extender expiración":      await ExtenderAsync();              break;
                 case "Actualizar observaciones": await ActualizarObservacionesAsync(); break;
                 case "Expirar reserva":          await ExpirarAsync();               break;
@@ -158,6 +163,60 @@ public sealed class BookingMenu
             var b = await scope.ServiceProvider.GetRequiredService<UpdateBookingObservationsUseCase>()
                 .ExecuteAsync(id, obsOpc);
             SpectreHelper.MostrarExito($"Observaciones de reserva [{b.CodigoReserva.Valor}] actualizadas.");
+        });
+        SpectreHelper.EsperarTecla();
+    }
+
+    private async Task ReprogramarAsync()
+    {
+        SpectreHelper.MostrarSubtitulo("Reprogramar Reserva");
+
+        var reservaId = SpectreHelper.PedirEntero("ID de la reserva (debe estar CONFIRMADA)");
+
+        await MostrarVuelosDisponiblesAsync();
+        var nuevoVueloId = SpectreHelper.PedirEntero("ID del nuevo vuelo");
+
+        var motivo = SpectreHelper.PedirTexto("Motivo de reprogramación");
+        if (string.IsNullOrWhiteSpace(motivo)) { SpectreHelper.MostrarError("El motivo es obligatorio."); SpectreHelper.EsperarTecla(); return; }
+
+        await ConsoleErrorHandler.ExecuteAsync(async () =>
+        {
+            await using var scope = _provider.CreateAsyncScope();
+            var (booking, enEspera) = await scope.ServiceProvider
+                .GetRequiredService<RescheduleBookingUseCase>()
+                .ExecuteAsync(reservaId, nuevoVueloId, motivo,
+                    _session.CurrentUserId > 0 ? _session.CurrentUserId : null);
+
+            if (enEspera)
+                SpectreHelper.MostrarInfo(
+                    $"No hay cupos disponibles en el vuelo {nuevoVueloId}. " +
+                    $"La reserva [{booking.CodigoReserva.Valor}] fue agregada a la lista de espera.");
+            else
+                SpectreHelper.MostrarExito(
+                    $"Reserva [{booking.CodigoReserva.Valor}] reprogramada al vuelo {nuevoVueloId}. " +
+                    "Los asientos deberán reasignarse.");
+        });
+        SpectreHelper.EsperarTecla();
+    }
+
+    private async Task AgregarListaEsperaAsync()
+    {
+        SpectreHelper.MostrarSubtitulo("Agregar a Lista de Espera");
+
+        var reservaId = SpectreHelper.PedirEntero("ID de la reserva");
+
+        await MostrarVuelosDisponiblesAsync();
+        var vueloId = SpectreHelper.PedirEntero("ID del vuelo deseado");
+
+        await ConsoleErrorHandler.ExecuteAsync(async () =>
+        {
+            await using var scope = _provider.CreateAsyncScope();
+            var entrada = await scope.ServiceProvider
+                .GetRequiredService<AddToWaitingListUseCase>()
+                .ExecuteAsync(reservaId, vueloId);
+            SpectreHelper.MostrarExito(
+                $"Reserva {reservaId} agregada a lista de espera. " +
+                $"Prioridad #{entrada.Prioridad}.");
         });
         SpectreHelper.EsperarTecla();
     }

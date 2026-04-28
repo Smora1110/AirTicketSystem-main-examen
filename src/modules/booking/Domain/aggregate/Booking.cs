@@ -127,6 +127,24 @@ public sealed class Booking
             nuevaExpiracion, FechaReserva.Valor);
     }
 
+    // ── Reprogramación ──────────────────────────────────────
+
+    public void CambiarVuelo(int nuevoVueloId)
+    {
+        if (nuevoVueloId <= 0)
+            throw new ArgumentException("El nuevo vuelo es obligatorio.");
+
+        if (nuevoVueloId == VueloId)
+            throw new InvalidOperationException(
+                "El nuevo vuelo debe ser diferente al vuelo actual.");
+
+        if (!EstaConfirmada)
+            throw new InvalidOperationException(
+                "Solo se pueden reprogramar reservas CONFIRMADAS.");
+
+        VueloId = nuevoVueloId;
+    }
+
     // ── Propiedades de negocio ───────────────────────────────
 
     public bool EstaActiva => Estado.EstaActiva;

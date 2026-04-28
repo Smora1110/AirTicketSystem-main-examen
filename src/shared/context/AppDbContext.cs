@@ -61,6 +61,10 @@ using AirTicketSystem.modules.bookinghistory.Infrastructure.entity;
 using AirTicketSystem.modules.ticket.Infrastructure.entity;
 using AirTicketSystem.modules.luggage.Infrastructure.entity;
 
+// Reprogramación y lista de espera
+using AirTicketSystem.modules.waitinglist.Infrastructure.entity;
+using AirTicketSystem.modules.reprogramacion.Infrastructure.entity;
+
 // Check-in y pagos
 using AirTicketSystem.modules.checkin.Infrastructure.entity;
 using AirTicketSystem.modules.boardingpass.Infrastructure.entity;
@@ -142,6 +146,10 @@ public class AppDbContext : DbContext
     public DbSet<BookingHistoryEntity> HistorialReserva => Set<BookingHistoryEntity>();
     public DbSet<TicketEntity> Tiquetes => Set<TicketEntity>();
     public DbSet<LuggageEntity> Equipaje => Set<LuggageEntity>();
+
+    // ── Reprogramación y lista de espera ───────────────────
+    public DbSet<WaitingListEntity> ListaEspera => Set<WaitingListEntity>();
+    public DbSet<RescheduleHistoryEntity> HistorialReprogramacion => Set<RescheduleHistoryEntity>();
 
     // ── Check-in y pagos ───────────────────────────────────
     public DbSet<CheckInEntity> CheckIns => Set<CheckInEntity>();
