@@ -9,8 +9,11 @@ using AirTicketSystem.modules.reprogramacion.Domain.Repositories;
 namespace AirTicketSystem.modules.waitinglist.Application.UseCases;
 
 /// <summary>
-/// Intenta promover al primer candidato PENDIENTE en la lista de espera
-/// de un vuelo. Se invoca automáticamente cuando se libera un asiento.
+/// Promueve al primer candidato PENDIENTE en la lista de espera de un vuelo.
+/// Se invoca automáticamente cuando se libera un asiento.
+/// Casos:
+///   - Reserva ya en el vuelo (PENDIENTE por cupos llenos al crear) → confirma + asigna asiento.
+///   - Reserva en otro vuelo (reprogramación pendiente) → cambia vuelo + confirma.
 /// </summary>
 public sealed class PromoteFromWaitingListUseCase
 {
@@ -27,10 +30,10 @@ public sealed class PromoteFromWaitingListUseCase
         IBookingPassengerRepository  passengerRepo,
         IRescheduleHistoryRepository rescheduleHistoryRepo)
     {
-        _waitingListRepo      = waitingListRepo;
-        _bookingRepo          = bookingRepo;
-        _seatRepo             = seatRepo;
-        _passengerRepo        = passengerRepo;
+        _waitingListRepo       = waitingListRepo;
+        _bookingRepo           = bookingRepo;
+        _seatRepo              = seatRepo;
+        _passengerRepo         = passengerRepo;
         _rescheduleHistoryRepo = rescheduleHistoryRepo;
     }
 
@@ -45,46 +48,61 @@ public sealed class PromoteFromWaitingListUseCase
         var candidato = await _waitingListRepo.FindPrimeroPendienteAsync(vueloId);
         if (candidato is null) return false;
 
-        var asientosDisponibles = await _seatRepo.ContarDisponiblesByVueloAsync(vueloId);
-        if (asientosDisponibles <= 0) return false;
+        var asientoLibre = await _seatRepo.FindPrimerDisponibleByVueloAsync(vueloId);
+        if (asientoLibre is null) return false;
 
         var booking = await _bookingRepo.FindByIdAsync(candidato.ReservaId);
         if (booking is null) return false;
 
-        var vueloAnterior = booking.VueloId;
-
-        // Liberar asientos del vuelo anterior asignados a los pasajeros de esta reserva
-        var pasajeros = await _passengerRepo.FindByReservaAsync(candidato.ReservaId);
-        foreach (var pasajero in pasajeros)
+        if (booking.VueloId == vueloId)
         {
-            if (!pasajero.TieneAsientoAsignado) continue;
+            var pasajeros = await _passengerRepo.FindByReservaAsync(candidato.ReservaId);
+            var sinAsiento = pasajeros.FirstOrDefault(p => !p.TieneAsientoAsignado);
 
-            var seatAnterior = await _seatRepo.FindByIdAsync(pasajero.AsientoId!.Value);
-            if (seatAnterior is not null && seatAnterior.Estado.Valor == "RESERVADO")
+            if (sinAsiento is not null)
             {
-                seatAnterior.Liberar();
-                await _seatRepo.UpdateAsync(seatAnterior);
+                asientoLibre.Reservar();
+                await _seatRepo.UpdateAsync(asientoLibre);
+                sinAsiento.AsignarAsiento(asientoLibre.Id);
+                await _passengerRepo.UpdateAsync(sinAsiento);
             }
 
-            pasajero.LiberarAsiento();
-            await _passengerRepo.UpdateAsync(pasajero);
+            booking.Confirmar();
+            await _bookingRepo.UpdateAsync(booking);
+        }
+        else
+        {
+            var vueloAnterior = booking.VueloId;
+
+            var pasajeros = await _passengerRepo.FindByReservaAsync(candidato.ReservaId);
+            foreach (var pasajero in pasajeros)
+            {
+                if (!pasajero.TieneAsientoAsignado) continue;
+
+                var seatAnterior = await _seatRepo.FindByIdAsync(pasajero.AsientoId!.Value);
+                if (seatAnterior is not null && seatAnterior.Estado.Valor == "RESERVADO")
+                {
+                    seatAnterior.Liberar();
+                    await _seatRepo.UpdateAsync(seatAnterior);
+                }
+
+                pasajero.LiberarAsiento();
+                await _passengerRepo.UpdateAsync(pasajero);
+            }
+
+            booking.CambiarVuelo(vueloId);
+            await _bookingRepo.UpdateAsync(booking);
+
+            await _rescheduleHistoryRepo.SaveAsync(
+                RescheduleHistory.Crear(
+                    booking.Id,
+                    vueloAnterior,
+                    vueloId,
+                    "Promoción automática desde lista de espera"));
         }
 
-        // Actualizar el vuelo en la reserva
-        booking.CambiarVuelo(vueloId);
-        await _bookingRepo.UpdateAsync(booking);
-
-        // Marcar la entrada de lista de espera como promovida
         candidato.Promover();
         await _waitingListRepo.UpdateAsync(candidato);
-
-        // Registrar en historial de reprogramación
-        await _rescheduleHistoryRepo.SaveAsync(
-            RescheduleHistory.Crear(
-                booking.Id,
-                vueloAnterior,
-                vueloId,
-                "Promoción automática desde lista de espera"));
 
         return true;
     }

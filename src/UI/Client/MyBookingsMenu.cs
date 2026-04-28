@@ -1,4 +1,3 @@
-// src/UI/Client/MyBookingsMenu.cs
 using Microsoft.Extensions.DependencyInjection;
 using AirTicketSystem.shared.UI;
 using AirTicketSystem.shared.helpers;
@@ -14,6 +13,8 @@ using AirTicketSystem.modules.luggage.Application.UseCases;
 using AirTicketSystem.modules.luggagetype.Domain.aggregate;
 using AirTicketSystem.modules.flight.Application.UseCases;
 using AirTicketSystem.modules.seatavailability.Application.UseCases;
+using AirTicketSystem.modules.seatavailability.Domain.Repositories;
+using AirTicketSystem.modules.waitinglist.Domain.Repositories;
 
 namespace AirTicketSystem.UI.Client;
 
@@ -99,17 +100,55 @@ public sealed class MyBookingsMenu
             var b = await SelectorUI.SeleccionarReservaAsync(_provider, clienteId);
             if (b is null) return;
 
+            await using var scope = _provider.CreateAsyncScope();
+
+            // Verificar si está en lista de espera
+            var enEspera = await scope.ServiceProvider
+                .GetRequiredService<IWaitingListRepository>()
+                .ExisteReservaEnEsperaAsync(b.Id, b.VueloId);
+
+            var estadoDisplay = b.Estado.Valor;
+            if (enEspera && b.Estado.Valor == "PENDIENTE")
+                estadoDisplay = "PENDIENTE (en lista de espera)";
+
             var tabla = SpectreHelper.CrearTabla("Campo", "Valor");
             SpectreHelper.AgregarFila(tabla, "ID",            b.Id.ToString());
             SpectreHelper.AgregarFila(tabla, "Código",        b.CodigoReserva.Valor);
             SpectreHelper.AgregarFila(tabla, "VueloID",       b.VueloId.ToString());
             SpectreHelper.AgregarFila(tabla, "TarifaID",      b.TarifaId.ToString());
-            SpectreHelper.AgregarFila(tabla, "Estado",        b.Estado.Valor);
+            SpectreHelper.AgregarFila(tabla, "Estado",        estadoDisplay);
             SpectreHelper.AgregarFila(tabla, "Total",         b.ValorTotal.Valor.ToString("C2"));
             SpectreHelper.AgregarFila(tabla, "Fecha reserva", b.FechaReserva.Valor.ToString("yyyy-MM-dd HH:mm"));
             SpectreHelper.AgregarFila(tabla, "Expira",        b.FechaExpiracion.Valor.ToString("yyyy-MM-dd HH:mm"));
             SpectreHelper.AgregarFila(tabla, "Observaciones", b.Observaciones?.Valor ?? "-");
             SpectreHelper.MostrarTabla(tabla);
+
+            // Pasajeros con número de asiento físico
+            var pasajeros = await scope.ServiceProvider
+                .GetRequiredService<GetPassengersByBookingUseCase>()
+                .ExecuteAsync(b.Id);
+
+            if (pasajeros.Count > 0)
+            {
+                SpectreHelper.MostrarSubtitulo("Pasajeros");
+                var seatRepo = scope.ServiceProvider.GetRequiredService<ISeatAvailabilityRepository>();
+                var tablaPax = SpectreHelper.CrearTabla("PasajeroID", "Tipo", "Asiento físico");
+                foreach (var pax in pasajeros)
+                {
+                    string asientoInfo = "Sin asignar";
+                    if (pax.AsientoId.HasValue)
+                    {
+                        var sa = await seatRepo.FindByIdAsync(pax.AsientoId.Value);
+                        asientoInfo = sa is not null
+                            ? $"AsientoID {sa.AsientoId} ({sa.Estado.Valor})"
+                            : $"ID {pax.AsientoId.Value}";
+                    }
+                    SpectreHelper.AgregarFila(tablaPax,
+                        pax.Id.ToString(), pax.TipoPasajero.Valor, asientoInfo);
+                }
+                SpectreHelper.MostrarTabla(tablaPax);
+            }
+
             SpectreHelper.EsperarTecla();
         });
     }

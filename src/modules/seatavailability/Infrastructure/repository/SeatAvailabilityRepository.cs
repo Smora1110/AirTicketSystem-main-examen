@@ -1,4 +1,3 @@
-// src/modules/seatavailability/Infrastructure/repository/SeatAvailabilityRepository.cs
 using Microsoft.EntityFrameworkCore;
 using AirTicketSystem.shared.context;
 using AirTicketSystem.modules.seatavailability.Domain.Repositories;
@@ -90,6 +89,17 @@ public sealed class SeatAvailabilityRepository : ISeatAvailabilityRepository
                 sa.VueloId == vueloId &&
                 sa.AsientoId == asientoId &&
                 sa.Estado == "DISPONIBLE");
+
+    public async Task<SeatAvailability?> FindPrimerDisponibleByVueloAsync(int vueloId)
+    {
+        var entity = await _context.DisponibilidadAsientos
+            .Include(sa => sa.Asiento)
+            .Where(sa => sa.VueloId == vueloId && sa.Estado == "DISPONIBLE")
+            .OrderBy(sa => sa.Asiento.Fila)
+            .ThenBy(sa => sa.Asiento.Columna)
+            .FirstOrDefaultAsync();
+        return entity is null ? null : MapToDomain(entity);
+    }
 
     public async Task SaveAllAsync(IEnumerable<SeatAvailability> asientos)
     {

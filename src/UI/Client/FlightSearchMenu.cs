@@ -9,6 +9,7 @@ using AirTicketSystem.modules.booking.Application.UseCases;
 using AirTicketSystem.modules.bookingpassenger.Application.UseCases;
 using AirTicketSystem.modules.fare.Application.UseCases;
 using AirTicketSystem.modules.payment.Application.UseCases;
+using AirTicketSystem.modules.waitinglist.Application.UseCases;
 
 namespace AirTicketSystem.UI.Client;
 
@@ -60,7 +61,6 @@ public sealed class FlightSearchMenu
             var vuelos = await scope.ServiceProvider.GetRequiredService<GetScheduledFlightsUseCase>().ExecuteAsync();
             var availUc = scope.ServiceProvider.GetRequiredService<GetAvailableSeatsByFlightUseCase>();
 
-            // LINQ: próximos 7 días, con asientos disponibles
             var hoy    = DateTime.UtcNow;
             var limite = hoy.AddDays(7);
 
@@ -121,7 +121,6 @@ public sealed class FlightSearchMenu
                     v.Estado.Valor);
             SpectreHelper.MostrarTabla(tabla);
 
-            // Mostrar tarifas activas para cada vuelo encontrado
             SpectreHelper.MostrarSubtitulo("Tarifas disponibles");
             foreach (var v in vuelos)
             {
@@ -198,9 +197,18 @@ public sealed class FlightSearchMenu
             var b = await scope.ServiceProvider.GetRequiredService<CreateBookingUseCase>()
                 .ExecuteAsync(clienteId, vuelo.Id, tarifa.Id, tarifa.PrecioTotal.Valor, obsOpc);
 
-            // En la creación de la reserva se deben registrar los pasajeros
-            var addPassengerUc = scope.ServiceProvider.GetRequiredService<AddPassengerUseCase>();
-            var availUc        = scope.ServiceProvider.GetRequiredService<GetAvailableSeatsByFlightUseCase>();
+            var addPassengerUc  = scope.ServiceProvider.GetRequiredService<AddPassengerUseCase>();
+            var assignSeatUc    = scope.ServiceProvider.GetRequiredService<AssignSeatUseCase>();
+            var availUc         = scope.ServiceProvider.GetRequiredService<GetAvailableSeatsByFlightUseCase>();
+
+            var disponiblesIniciales = await availUc.ExecuteAsync(vuelo.Id);
+            bool vueloLleno = disponiblesIniciales.Count == 0;
+
+            if (vueloLleno)
+                SpectreHelper.MostrarAdvertencia(
+                    "Este vuelo no tiene asientos disponibles. " +
+                    "Su reserva será agregada a la lista de espera y se confirmará " +
+                    "automáticamente cuando se libere un cupo.");
 
             var agregados = 0;
             while (true)
@@ -217,8 +225,8 @@ public sealed class FlightSearchMenu
 
                 var tipoOpc = SpectreHelper.SeleccionarOpcionTexto("Tipo de pasajero", ["ADULTO", "MENOR", "INFANTE"]);
 
-                int? asientoId = null;
-                if (SpectreHelper.Confirmar("¿Desea seleccionar asiento ahora?"))
+                int? seatAvailabilityId = null;
+                if (!vueloLleno && SpectreHelper.Confirmar("¿Desea seleccionar asiento ahora?"))
                 {
                     var disponibles = await availUc.ExecuteAsync(vuelo.Id);
                     if (disponibles.Count == 0)
@@ -231,33 +239,50 @@ public sealed class FlightSearchMenu
                             "Seleccione el asiento",
                             disponibles,
                             s => $"  AsientoID:{s.AsientoId}  Estado:{s.Estado.Valor}");
-                        asientoId = seleccionado.AsientoId;
+                        seatAvailabilityId = seleccionado.Id;
                     }
                 }
 
-                _ = await addPassengerUc.ExecuteAsync(b.Id, persona.Id, tipoOpc, asientoId);
+                var p = await addPassengerUc.ExecuteAsync(b.Id, persona.Id, tipoOpc);
+                if (seatAvailabilityId.HasValue)
+                    await assignSeatUc.ExecuteAsync(p.Id, seatAvailabilityId.Value);
                 agregados++;
 
                 if (!SpectreHelper.Confirmar("¿Desea agregar otro pasajero?"))
                     break;
             }
 
-            // Portal cliente: pago inmediato y confirmación de reserva
             var pago = await scope.ServiceProvider.GetRequiredService<CreatePaymentUseCase>()
                 .ExecuteAsync(b.Id, metodoPago.Id, b.ValorTotal.Valor);
 
             _ = await scope.ServiceProvider.GetRequiredService<ApprovePaymentUseCase>()
                 .ExecuteAsync(pago.Id, $"CLIENT-{Guid.NewGuid():N}");
 
-            _ = await scope.ServiceProvider.GetRequiredService<ConfirmBookingUseCase>()
-                .ExecuteAsync(b.Id, _session.CurrentUserId > 0 ? _session.CurrentUserId : null);
+            if (vueloLleno)
+            {
+                await scope.ServiceProvider.GetRequiredService<AddToWaitingListUseCase>()
+                    .ExecuteAsync(b.Id, vuelo.Id);
 
-            SpectreHelper.MostrarExito(
-                $"Reserva creada exitosamente.\n" +
-                $"  Código : {b.CodigoReserva.Valor}\n" +
-                $"  Estado : {b.Estado.Valor}\n" +
-                $"  Expira : {b.FechaExpiracion.Valor:yyyy-MM-dd HH:mm}\n" +
-                $"  Total  : {b.ValorTotal.Valor:C2}");
+                SpectreHelper.MostrarInfo(
+                    $"Reserva registrada en LISTA DE ESPERA.\n" +
+                    $"  Código : {b.CodigoReserva.Valor}\n" +
+                    $"  Estado : PENDIENTE (en espera de cupo)\n" +
+                    $"  Vuelo  : {vuelo.NumeroVuelo.Valor}\n" +
+                    $"  Total  : {b.ValorTotal.Valor:C2}\n" +
+                    "  Se le asignará un asiento automáticamente cuando se libere un cupo.");
+            }
+            else
+            {
+                _ = await scope.ServiceProvider.GetRequiredService<ConfirmBookingUseCase>()
+                    .ExecuteAsync(b.Id, _session.CurrentUserId > 0 ? _session.CurrentUserId : null);
+
+                SpectreHelper.MostrarExito(
+                    $"Reserva creada exitosamente.\n" +
+                    $"  Código : {b.CodigoReserva.Valor}\n" +
+                    $"  Estado : CONFIRMADA\n" +
+                    $"  Expira : {b.FechaExpiracion.Valor:yyyy-MM-dd HH:mm}\n" +
+                    $"  Total  : {b.ValorTotal.Valor:C2}");
+            }
         });
         SpectreHelper.EsperarTecla();
     }
@@ -289,7 +314,6 @@ public sealed class FlightSearchMenu
         SpectreHelper.EsperarTecla();
     }
 
-    // Resuelve el clienteId buscando por usuarioId en la BD
     private async Task<int> ObtenerClienteIdAsync(IServiceProvider sp)
     {
         var clientes = await sp.GetRequiredService<AirTicketSystem.modules.client.Application.UseCases.GetAllClientsUseCase>()

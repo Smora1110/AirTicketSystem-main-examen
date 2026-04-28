@@ -1,4 +1,3 @@
-// src/modules/waitinglist/Application/UseCases/GetWaitingListByFlightUseCase.cs
 using AirTicketSystem.modules.waitinglist.Domain.aggregate;
 using AirTicketSystem.modules.waitinglist.Domain.Repositories;
 
