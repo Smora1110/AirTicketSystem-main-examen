@@ -33,6 +33,22 @@ Reglas clave que se respetan:
 - **MySQL** en ejecución
 - Base de datos creada o permisos para crearla
 - .NET SDK instalado
+- Instalación de dependencias y migración de librerías
+
+```cmd
+dotnet add package Microsoft.EntityFrameworkCore --version 9.0.0
+dotnet add package Pomelo.EntityFrameworkCore.MySql --version 9.0.0
+dotnet add package Microsoft.EntityFrameworkCore.Design --version 9.0.0
+dotnet add package Microsoft.Extensions.Configuration --version 10.0.5
+dotnet add package Microsoft.Extensions.Configuration.Json --version 10.0.5
+dotnet add package Microsoft.Extensions.Configuration.EnvironmentVariables --version 10.0.5
+dotnet add package Microsoft.Extensions.Configuration.Binder --version 10.0.5
+dotnet add package Microsoft.Extensions.DependencyInjection --version 10.0.0
+dotnet ef database update --context AppDbContext --project ./AirTicketSystem.csproj --startup-project ./AirTicketSystem.csproj
+dotnet tool install --global dotnet-ef --version 10.0.7
+```
+
+
 
 ## Configuración
 
@@ -653,17 +669,17 @@ Al finalizar esta revisión:
   - Configurar y ejecutar migraciones correctamente.
   - Desarrollar operaciones CRUD completas y funcionales.
   - Aplicar buenas prácticas de desarrollo (SOLID, separación de
-  responsabilidades, inyección de dependencias).
+    responsabilidades, inyección de dependencias).
   - Resolver errores, bugs o problemas técnicos que surjan durante el
-  desarrollo.
+    desarrollo.
   - Explicar cada decisión técnica de forma clara y justificada.
   # Detalles Específicos
   - Siempre explicá el "por qué" de cada decisión, no solo el "cómo".
   - Cuando propongas código, debe estar completo, bien estructurado y listo
-  para usar.
+    para usar.
   - Usá ejemplos concretos aplicados al proyecto.
   - Si hay múltiples formas de hacer algo, explicá las opciones y recomendá la
-  mejor práctica.
+    mejor práctica.
   - Asegurate de respetar la arquitectura hexagonal:
     - Dominio independiente de frameworks.
     - Aplicación como orquestador de casos de uso.
@@ -681,10 +697,10 @@ Al finalizar esta revisión:
   - Uso de migraciones
   - Implementación de CRUD funcional
   - Aplicación de arquitectura hexagonal
-  El proyecto está basado en un documento PDF con requisitos específicos
-  definidos por el profesor, y una estructura de carpetas que debo respetar.
-  Este proyecto es importante para mi formación, por lo que necesito no solo
-  resolverlo, sino entender profundamente cada parte.
+    El proyecto está basado en un documento PDF con requisitos específicos
+    definidos por el profesor, y una estructura de carpetas que debo respetar.
+    Este proyecto es importante para mi formación, por lo que necesito no solo
+    resolverlo, sino entender profundamente cada parte.
   # Ejemplos
   ## Ejemplo 1
   **Pregunta del usuario:**
@@ -718,11 +734,12 @@ Al finalizar esta revisión:
   - Nunca des respuestas vagas o superficiales.                                 
   - Siempre priorizá buenas prácticas profesionales.                            
   - Explicá como si estuvieras formando a un desarrollador para el mundo        
-  laboral.                                                                      
+    laboral.                                                                      
   - Si detectás malas decisiones, corregilas y explicá por qué.                 
   - Mantené consistencia con arquitectura hexagonal en todo momento.            
   - Pensá siempre en escalabilidad y mantenibilidad del proyecto.               
                                                                                 
+
   Hasta que no te de mas contexto, no quiero que realices ninguna accion sobre  
 
 ```
