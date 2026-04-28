@@ -58,13 +58,21 @@ public sealed class SeatAvailabilityMenu
 
     private async Task ReservarAsync()
     {
+        SpectreHelper.MostrarInfo(
+            "AVISO: Esta acción marca el asiento como RESERVADO a nivel administrativo\n" +
+            "pero NO lo vincula a ninguna reserva ni pasajero.\n" +
+            "Para asignar un asiento a un pasajero use:\n" +
+            "  Reservas y Pasajeros › Pasajeros de reserva › Asignar asiento");
+
+        if (!SpectreHelper.Confirmar("¿Continuar de todas formas?")) { SpectreHelper.EsperarTecla(); return; }
+
         var vueloId   = SpectreHelper.PedirEntero("ID del vuelo");
-        var asientoId = SpectreHelper.PedirEntero("ID del asiento");
+        var asientoId = SpectreHelper.PedirEntero("ID del asiento físico (AircraftSeat ID)");
         await ConsoleErrorHandler.ExecuteAsync(async () =>
         {
             await using var scope = _provider.CreateAsyncScope();
             await scope.ServiceProvider.GetRequiredService<ReserveSeatUseCase>().ExecuteAsync(vueloId, asientoId);
-            SpectreHelper.MostrarExito("Asiento reservado.");
+            SpectreHelper.MostrarExito("Asiento marcado como RESERVADO (sin vincular a reserva).");
         });
         SpectreHelper.EsperarTecla();
     }

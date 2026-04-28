@@ -12,6 +12,8 @@ using AirTicketSystem.modules.additionalcharge.Application.UseCases;
 using AirTicketSystem.modules.client.Application.UseCases;
 using AirTicketSystem.modules.luggage.Application.UseCases;
 using AirTicketSystem.modules.luggagetype.Domain.aggregate;
+using AirTicketSystem.modules.flight.Application.UseCases;
+using AirTicketSystem.modules.seatavailability.Application.UseCases;
 
 namespace AirTicketSystem.UI.Client;
 
@@ -37,10 +39,11 @@ public sealed class MyBookingsMenu
                     "2.1 Ver mis reservas",
                     "2.2 Detalle de reserva",
                     "2.3 Cancelar mi reserva",
-                    "2.4 Hacer check-in virtual",
-                    "2.5 Mi pase de abordar",
-                    "2.6 Gestionar equipaje",
-                    "2.7 Ver mis tiquetes",
+                    "2.4 Reprogramar mi reserva",
+                    "2.5 Hacer check-in virtual",
+                    "2.6 Mi pase de abordar",
+                    "2.7 Gestionar equipaje",
+                    "2.8 Ver mis tiquetes",
                     "Pasajeros de mi reserva",
                     "Mis pagos",
                     "Emitir tiquete",
@@ -52,10 +55,11 @@ public sealed class MyBookingsMenu
                 case "2.1 Ver mis reservas":        await VerReservasAsync();          break;
                 case "2.2 Detalle de reserva":      await DetalleReservaAsync();       break;
                 case "2.3 Cancelar mi reserva":     await CancelarReservaAsync();      break;
-                case "2.4 Hacer check-in virtual":  await HacerCheckinVirtualAsync();  break;
-                case "2.5 Mi pase de abordar":      await VerPaseAbordarAsync();       break;
-                case "2.6 Gestionar equipaje":      await GestionarEquipajeAsync();    break;
-                case "2.7 Ver mis tiquetes":        await ConsultarTiqueteAsync();     break;
+                case "2.4 Reprogramar mi reserva":  await ReprogramarReservaAsync();   break;
+                case "2.5 Hacer check-in virtual":  await HacerCheckinVirtualAsync();  break;
+                case "2.6 Mi pase de abordar":      await VerPaseAbordarAsync();       break;
+                case "2.7 Gestionar equipaje":      await GestionarEquipajeAsync();    break;
+                case "2.8 Ver mis tiquetes":        await ConsultarTiqueteAsync();     break;
                 case "Pasajeros de mi reserva":     await VerPasajerosAsync();         break;
                 case "Mis pagos":                   await VerPagosAsync();             break;
                 case "Emitir tiquete":              await VerTiquetesAsync();          break;
@@ -399,6 +403,88 @@ public sealed class MyBookingsMenu
                 }
             });
         }
+    }
+
+    private async Task ReprogramarReservaAsync()
+    {
+        await ConsoleErrorHandler.ExecuteAsync(async () =>
+        {
+            var clienteId = await ObtenerClienteIdAsync();
+            var reserva   = await SelectorUI.SeleccionarReservaAsync(_provider, clienteId);
+            if (reserva is null) { SpectreHelper.EsperarTecla(); return; }
+
+            if (!reserva.EstaConfirmada)
+            {
+                SpectreHelper.MostrarError(
+                    $"Solo se pueden reprogramar reservas CONFIRMADAS. " +
+                    $"Estado actual: {reserva.Estado.Valor}.");
+                SpectreHelper.EsperarTecla();
+                return;
+            }
+
+            // Mostrar vuelos programados disponibles
+            await using var scope = _provider.CreateAsyncScope();
+            var vuelos = await scope.ServiceProvider
+                .GetRequiredService<GetScheduledFlightsUseCase>()
+                .ExecuteAsync();
+
+            if (vuelos.Count == 0)
+            {
+                SpectreHelper.MostrarInfo("No hay vuelos programados disponibles.");
+                SpectreHelper.EsperarTecla();
+                return;
+            }
+
+            var tabla = SpectreHelper.CrearTabla("ID", "Número", "RutaID", "Salida", "Estado");
+            foreach (var f in vuelos)
+                SpectreHelper.AgregarFila(tabla,
+                    f.Id.ToString(), f.NumeroVuelo.Valor,
+                    f.RutaId.ToString(),
+                    f.FechaSalida.Valor.ToString("yyyy-MM-dd HH:mm"),
+                    f.Estado.Valor);
+            SpectreHelper.MostrarTabla(tabla);
+
+            // Mostrar cuántos asientos disponibles tiene cada vuelo
+            SpectreHelper.MostrarInfo(
+                $"Reserva actual: [{reserva.CodigoReserva.Valor}] en vuelo {reserva.VueloId}.");
+
+            var nuevoVueloId = SpectreHelper.PedirEntero("ID del nuevo vuelo");
+            var motivo       = SpectreHelper.PedirTexto("Motivo del cambio");
+
+            if (string.IsNullOrWhiteSpace(motivo))
+            {
+                SpectreHelper.MostrarError("El motivo es obligatorio.");
+                SpectreHelper.EsperarTecla();
+                return;
+            }
+
+            // Mostrar disponibilidad del nuevo vuelo
+            var cupos = await scope.ServiceProvider
+                .GetRequiredService<GetAvailableSeatsByFlightUseCase>()
+                .ExecuteAsync(nuevoVueloId);
+            SpectreHelper.MostrarInfo($"Asientos disponibles en vuelo {nuevoVueloId}: {cupos.Count}");
+
+            if (!SpectreHelper.Confirmar($"¿Confirma reprogramar la reserva [{reserva.CodigoReserva.Valor}] al vuelo {nuevoVueloId}?"))
+            {
+                SpectreHelper.EsperarTecla();
+                return;
+            }
+
+            var (booking, enEspera) = await scope.ServiceProvider
+                .GetRequiredService<RescheduleBookingUseCase>()
+                .ExecuteAsync(reserva.Id, nuevoVueloId, motivo, _session.CurrentUserId > 0 ? _session.CurrentUserId : null);
+
+            if (enEspera)
+                SpectreHelper.MostrarInfo(
+                    $"Sin cupos en el vuelo {nuevoVueloId}. " +
+                    $"La reserva [{booking.CodigoReserva.Valor}] fue puesta en lista de espera. " +
+                    "Se le notificará cuando haya disponibilidad.");
+            else
+                SpectreHelper.MostrarExito(
+                    $"Reserva [{booking.CodigoReserva.Valor}] reprogramada al vuelo {nuevoVueloId}. " +
+                    "Sus asientos fueron liberados. Reasígnelos en 'Pasajeros de mi reserva'.");
+        });
+        SpectreHelper.EsperarTecla();
     }
 
     private async Task<int> ObtenerClienteIdAsync()
